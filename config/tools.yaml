@@ -1,0 +1,31 @@
+tools:
+  nvim:
+    name: "Neovim"
+    description: "Neovim editor configuration"
+    paths:
+      - "~/.config/nvim/init.lua"
+      - "~/.config/nvim/lua/**/*.lua"
+
+  tmux:
+    name: "tmux"
+    description: "Terminal multiplexer"
+    paths:
+      - "~/.tmux.conf"
+      - "~/.config/tmux/tmux.conf"
+      - "~/.config/tmux/tmux.remote.conf"
+
+  zsh:
+    name: "Zsh"
+    description: "Z shell configuration"
+    paths:
+      - "~/.zshrc"
+      - "~/.p10k.zsh"
+      - "~/.dircolors"
+      - "~/.oh-my-zsh/lib/theme-and-appearance.zsh"
+      - "~/.oh-my-zsh/custom/*.zsh"
+
+  bash:
+    name: "Bash"
+    description: "Bash shell configuration"
+    paths:
+      - "~/.bashrc"
