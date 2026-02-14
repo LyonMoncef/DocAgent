@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from typing import Optional
@@ -5,6 +6,7 @@ from typing import Optional
 from .backup import BackupManager
 from .config_loader import ConfigLoader
 from .llm.base import BaseLLM
+from .powertoys_defaults import DEFAULTS as PT_DEFAULTS
 
 
 SYSTEM_PROMPT = """You are DocAgent, a concise assistant for dotfiles/config management.
@@ -15,6 +17,7 @@ RULES:
 - IMPORTANT: Use the exact file paths from <config_files>. Never use example paths like /home/user/.
 - If multiple approaches exist, pick the best one. Don't list alternatives.
 - You can add/remove/list managed tools via the manage_tools tool. Use it when the user wants to track a new config or stop tracking one.
+- When the user asks to list/show shortcuts or hotkeys, use the list_shortcuts tool. It returns a pre-formatted table — output it directly without modification.
 
 Available config files: {tools}
 """
@@ -59,6 +62,20 @@ TOOLS = [
                 }
             },
             "required": ["file_path", "text"]
+        }
+    },
+    {
+        "name": "list_shortcuts",
+        "description": "List all keyboard shortcuts/hotkeys for a tool. Returns a pre-formatted colored table. Use when the user asks to see shortcuts, hotkeys, or keybindings.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tool_name": {
+                    "type": "string",
+                    "description": "Tool to list shortcuts for (default: 'powertoys')"
+                }
+            },
+            "required": []
         }
     },
     {
@@ -141,6 +158,8 @@ class DocAgent:
             "window": "tmux",
             "pane": "tmux",
             "session": "tmux",
+            "hotkey": "powertoys",
+            "shortcut": "powertoys",
         }
         for alias, tool_name in aliases.items():
             if alias in query_lower and tool_name not in detected:
@@ -181,10 +200,173 @@ class DocAgent:
                 inputs["file_path"],
                 inputs["text"]
             )
+        elif name == "list_shortcuts":
+            return self._tool_list_shortcuts(inputs.get("tool_name", "powertoys"))
         elif name == "manage_tools":
             return self._tool_manage_tools(inputs)
         else:
             return f"Unknown tool: {name}"
+
+    # Key-code to readable name mapping
+    _KEY_NAMES = {
+        8: "Backspace", 9: "Tab", 13: "Enter", 19: "Pause", 20: "CapsLock",
+        27: "Esc", 32: "Space", 33: "PgUp", 34: "PgDn", 35: "End", 36: "Home",
+        37: "Left", 38: "Up", 39: "Right", 40: "Down", 44: "PrtSc", 45: "Ins",
+        46: "Del", 91: "LWin", 92: "RWin",
+        112: "F1", 113: "F2", 114: "F3", 115: "F4", 116: "F5", 117: "F6",
+        118: "F7", 119: "F8", 120: "F9", 121: "F10", 122: "F11", 123: "F12",
+        186: ";", 187: "=", 188: ",", 189: "-", 190: ".", 191: "/", 192: "`",
+        219: "[", 220: "\\", 221: "]", 222: "'",
+    }
+
+    @staticmethod
+    def _hotkey_to_str(hk: dict) -> str:
+        """Convert a PowerToys hotkey dict to a readable string like 'Win+Ctrl+T'."""
+        parts = []
+        if hk.get("win"):
+            parts.append("Win")
+        if hk.get("ctrl"):
+            parts.append("Ctrl")
+        if hk.get("alt"):
+            parts.append("Alt")
+        if hk.get("shift"):
+            parts.append("Shift")
+        code = hk.get("code", 0)
+        if code:
+            key = hk.get("key", "")
+            if key and len(key) == 1:
+                parts.append(key.upper())
+            elif code in DocAgent._KEY_NAMES:
+                parts.append(DocAgent._KEY_NAMES[code])
+            elif 65 <= code <= 90:
+                parts.append(chr(code))
+            elif 48 <= code <= 57:
+                parts.append(chr(code))
+            else:
+                parts.append(f"Key({code})")
+        if not parts:
+            return "(none)"
+        return "+".join(parts)
+
+    @staticmethod
+    def _humanize_action(action: str) -> str:
+        """Convert a settings key like 'fancyzones_editor_hotkey' to 'Editor'."""
+        # Strip common prefixes/suffixes
+        s = action
+        for prefix in ("fancyzones_", "paste-as-", "advanced-paste-", "mute_"):
+            if s.startswith(prefix):
+                s = s[len(prefix):]
+        for suffix in ("_hotkey", "-hotkey", "_shortcut", "Shortcut", "Hotkey"):
+            if s.endswith(suffix):
+                s = s[:-len(suffix)]
+        # Convert underscores/hyphens to spaces and title-case
+        s = s.replace("_", " ").replace("-", " ").strip()
+        return s.title() if s else action
+
+    def _tool_list_shortcuts(self, tool_name: str) -> str:
+        """List all hotkeys for a tool as a pre-formatted colored table."""
+        if tool_name != "powertoys":
+            return f"list_shortcuts is only supported for 'powertoys' currently."
+
+        files = self.config_loader.get_tool_files("powertoys")
+        if not files:
+            return "No PowerToys config files found. Run sync.sh first."
+
+        # ANSI color codes
+        YELLOW = "\033[33m"
+        GREEN = "\033[32m"
+        CYAN = "\033[36m"
+        DIM = "\033[2m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
+
+        # Hotkey field patterns to look for
+        hotkey_keys = {
+            "hotkey", "activation_shortcut", "ActivationShortcut",
+            "open_shortcutguide", "open_powerlauncher",
+            "fancyzones_editor_hotkey", "fancyzones_nextTab_hotkey",
+            "fancyzones_prevTab_hotkey",
+            "advanced-paste-ui-hotkey", "paste-as-plain-hotkey",
+            "paste-as-markdown-hotkey", "paste-as-json-hotkey",
+            "reparent-hotkey", "thumbnail-hotkey",
+            "mute_camera_and_microphone_hotkey", "mute_microphone_hotkey",
+            "mute_camera_hotkey",
+            "ToggleEasyMouseShortcut", "LockMachineShortcut",
+            "ReconnectShortcut",
+        }
+
+        rows = []  # (module, action_display, shortcut_str, is_custom)
+
+        for filepath, content in files.items():
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                continue
+
+            module = data.get("name", "")
+            if not module:
+                # Derive from path: .../ModuleName/settings.json
+                parts = filepath.replace("\\", "/").split("/")
+                if len(parts) >= 2:
+                    module = parts[-2]
+                else:
+                    continue
+
+            props = data.get("properties", {})
+            for key in hotkey_keys:
+                if key not in props:
+                    continue
+                val = props[key]
+                # Handle both {"value": {hotkey}} and {hotkey} shapes
+                if isinstance(val, dict) and "value" in val and isinstance(val["value"], dict):
+                    hk = val["value"]
+                elif isinstance(val, dict) and "code" in val:
+                    hk = val
+                else:
+                    continue
+
+                shortcut_str = self._hotkey_to_str(hk)
+                if shortcut_str == "(none)":
+                    continue
+
+                default = PT_DEFAULTS.get((module, key), None)
+                is_custom = default is not None and shortcut_str != default
+
+                rows.append((module, self._humanize_action(key), shortcut_str, is_custom))
+
+        if not rows:
+            return "No hotkeys found in PowerToys configs."
+
+        # Sort by module then action
+        rows.sort(key=lambda r: (r[0].lower(), r[1].lower()))
+
+        # Calculate column widths
+        mod_w = max(len(r[0]) for r in rows)
+        act_w = max(len(r[1]) for r in rows)
+
+        # Build table
+        header = f"{'Module':<{mod_w}}  {'Action':<{act_w}}  Shortcut"
+        sep = "─" * (mod_w + act_w + 20)
+        lines = [
+            f"\n{BOLD}PowerToys Shortcuts{RESET}",
+            f"{DIM}{sep}{RESET}",
+            f"{BOLD}{header}{RESET}",
+            f"{DIM}{sep}{RESET}",
+        ]
+
+        for module, action, shortcut, is_custom in rows:
+            if is_custom:
+                shortcut_display = f"{YELLOW}{shortcut} ★{RESET}"
+            else:
+                shortcut_display = f"{GREEN}{shortcut}{RESET}"
+            lines.append(
+                f"{CYAN}{module:<{mod_w}}{RESET}  {action:<{act_w}}  {shortcut_display}"
+            )
+
+        lines.append(f"{DIM}{sep}{RESET}")
+        lines.append(f"{DIM}★ = user-customized (differs from default){RESET}\n")
+
+        return "\n".join(lines)
 
     def _tool_manage_tools(self, inputs: dict) -> str:
         """Add, remove, or list managed tools."""
