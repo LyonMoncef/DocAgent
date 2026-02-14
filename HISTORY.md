@@ -50,3 +50,14 @@ Personal assistant for querying and editing dotfiles via Claude API.
 - Rate limit errors auto-retry with exponential backoff (10s, 20s, 40s)
 - Reduced zsh config to essential files only (avoid token limits)
 - System prompt updated for concise responses
+
+---
+
+## 2026-02-14 — CLI Shortcut
+
+**Commit:** `TBD` — feat: add global docagent shell command
+
+- Added `~/.local/bin/docagent` shell script for quick access from anywhere
+- Activates venv and runs `src/main.py` automatically
+- Supports argument forwarding (`docagent --help`, etc.)
+- No need to navigate to project dir or manually activate venv
