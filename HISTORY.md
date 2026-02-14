@@ -55,7 +55,7 @@ Personal assistant for querying and editing dotfiles via Claude API.
 
 ## 2026-02-14 — CLI Shortcut
 
-**Commit:** `TBD` — feat: add global docagent shell command
+**Commit:** `b3f1276` — feat: add global docagent shell command
 
 - Added `~/.local/bin/docagent` shell script for quick access from anywhere
 - Activates venv and runs `src/main.py` automatically
