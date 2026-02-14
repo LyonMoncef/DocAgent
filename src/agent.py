@@ -14,6 +14,7 @@ RULES:
 - When user asks to CHANGE something, use edit_config or append_to_config tool immediately.
 - IMPORTANT: Use the exact file paths from <config_files>. Never use example paths like /home/user/.
 - If multiple approaches exist, pick the best one. Don't list alternatives.
+- You can add/remove/list managed tools via the manage_tools tool. Use it when the user wants to track a new config or stop tracking one.
 
 Available config files: {tools}
 """
@@ -58,6 +59,38 @@ TOOLS = [
                 }
             },
             "required": ["file_path", "text"]
+        }
+    },
+    {
+        "name": "manage_tools",
+        "description": "Add, remove, or list managed configuration tools. Use when the user wants to track a new config (e.g., 'add my kitty config') or stop tracking one.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "remove", "list"],
+                    "description": "The action to perform"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "Tool key identifier (e.g., 'kitty'). Required for add/remove."
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Display name (e.g., 'Kitty'). Required for add."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Tool description (e.g., 'Kitty terminal emulator'). Required for add."
+                },
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of config file paths or globs (e.g., ['~/.config/kitty/kitty.conf']). Required for add."
+                }
+            },
+            "required": ["action"]
         }
     }
 ]
@@ -148,8 +181,41 @@ class DocAgent:
                 inputs["file_path"],
                 inputs["text"]
             )
+        elif name == "manage_tools":
+            return self._tool_manage_tools(inputs)
         else:
             return f"Unknown tool: {name}"
+
+    def _tool_manage_tools(self, inputs: dict) -> str:
+        """Add, remove, or list managed tools."""
+        action = inputs["action"]
+
+        if action == "list":
+            tools = self.config_loader.list_tools()
+            if not tools:
+                return "No tools configured."
+            lines = []
+            for key in tools:
+                info = self.config_loader.get_tool_info(key)
+                name = info.get("name", key) if info else key
+                paths = info.get("paths", []) if info else []
+                lines.append(f"- {key}: {name} ({', '.join(paths)})")
+            return "Managed tools:\n" + "\n".join(lines)
+
+        if action == "add":
+            for field in ("key", "name", "description", "paths"):
+                if field not in inputs or not inputs[field]:
+                    return f"Error: '{field}' is required for add."
+            return self.config_loader.add_tool(
+                inputs["key"], inputs["name"], inputs["description"], inputs["paths"]
+            )
+
+        if action == "remove":
+            if "key" not in inputs or not inputs["key"]:
+                return "Error: 'key' is required for remove."
+            return self.config_loader.remove_tool(inputs["key"])
+
+        return f"Unknown action: {action}"
 
     def _tool_edit_config(self, file_path: str, old_text: str, new_text: str) -> str:
         """Edit a config file by replacing text."""

@@ -1,31 +1,39 @@
 tools:
   nvim:
-    name: "Neovim"
-    description: "Neovim editor configuration"
+    name: Neovim
+    description: Neovim editor configuration
     paths:
-      - "~/.config/nvim/init.lua"
-      - "~/.config/nvim/lua/**/*.lua"
-
+    - ~/.config/nvim/init.lua
+    - ~/.config/nvim/lua/**/*.lua
   tmux:
-    name: "tmux"
-    description: "Terminal multiplexer"
+    name: tmux
+    description: Terminal multiplexer
     paths:
-      - "~/.tmux.conf"
-      - "~/.config/tmux/tmux.conf"
-      - "~/.config/tmux/tmux.remote.conf"
-
+    - ~/.tmux.conf
+    - ~/.config/tmux/tmux.conf
+    - ~/.config/tmux/tmux.remote.conf
   zsh:
-    name: "Zsh"
-    description: "Z shell configuration"
+    name: Zsh
+    description: Z shell configuration
     paths:
-      - "~/.zshrc"
-      - "~/.p10k.zsh"
-      - "~/.dircolors"
-      - "~/.oh-my-zsh/lib/theme-and-appearance.zsh"
-      - "~/.oh-my-zsh/custom/*.zsh"
-
+    - ~/.zshrc
+    - ~/.p10k.zsh
+    - ~/.dircolors
+    - ~/.oh-my-zsh/lib/theme-and-appearance.zsh
+    - ~/.oh-my-zsh/custom/*.zsh
   bash:
-    name: "Bash"
-    description: "Bash shell configuration"
+    name: Bash
+    description: Bash shell configuration
     paths:
-      - "~/.bashrc"
+    - ~/.bashrc
+  powertoys:
+    name: PowerToys
+    description: Microsoft PowerToys utilities configuration
+    paths:
+    - ~/dotfiles/powertoys/settings.json
+    - ~/dotfiles/powertoys/Keyboard Manager/*.json
+    - ~/dotfiles/powertoys/FancyZones/settings.json
+    - ~/dotfiles/powertoys/FancyZones/custom-layouts.json
+    - ~/dotfiles/powertoys/FancyZones/layout-hotkeys.json
+    - ~/dotfiles/powertoys/Shortcut Guide/*.json
+    - ~/dotfiles/powertoys/PowerToys Run/Settings/PowerToysRunSettings.json

@@ -5,16 +5,66 @@ from typing import Optional
 
 import yaml
 
+from .backup import BackupManager
+
 
 class ConfigLoader:
-    def __init__(self, tools_yaml_path: str = "config/tools.yaml"):
+    def __init__(self, tools_yaml_path: str = "config/tools.yaml", backup_manager: Optional[BackupManager] = None):
         self.tools_yaml_path = tools_yaml_path
+        self.backup_manager = backup_manager or BackupManager()
         self.tools = self._load_tools_config()
 
     def _load_tools_config(self) -> dict:
         with open(self.tools_yaml_path, "r") as f:
             data = yaml.safe_load(f)
         return data.get("tools", {})
+
+    def reload(self):
+        """Re-read tools.yaml and update self.tools."""
+        self.tools = self._load_tools_config()
+
+    def add_tool(self, key: str, name: str, description: str, paths: list[str]) -> str:
+        """Add a new tool to tools.yaml. Returns confirmation message."""
+        if key in self.tools:
+            return f"Tool '{key}' already exists. Remove it first to re-add."
+
+        self.backup_manager.backup(self.tools_yaml_path)
+
+        with open(self.tools_yaml_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+
+        if "tools" not in data:
+            data["tools"] = {}
+
+        data["tools"][key] = {
+            "name": name,
+            "description": description,
+            "paths": paths,
+        }
+
+        with open(self.tools_yaml_path, "w") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+        self.reload()
+        return f"Added tool '{key}' ({name})."
+
+    def remove_tool(self, key: str) -> str:
+        """Remove a tool from tools.yaml. Returns confirmation message."""
+        if key not in self.tools:
+            return f"Tool '{key}' not found."
+
+        self.backup_manager.backup(self.tools_yaml_path)
+
+        with open(self.tools_yaml_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+
+        del data["tools"][key]
+
+        with open(self.tools_yaml_path, "w") as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+        self.reload()
+        return f"Removed tool '{key}'."
 
     def _expand_path(self, path: str) -> list[str]:
         """Expand ~ and resolve glob patterns, return list of actual file paths."""
