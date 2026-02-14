@@ -30,10 +30,10 @@ tools:
     name: PowerToys
     description: Microsoft PowerToys utilities configuration
     paths:
-    - ~/dotfiles/powertoys/settings.json
-    - ~/dotfiles/powertoys/Keyboard Manager/*.json
-    - ~/dotfiles/powertoys/FancyZones/settings.json
-    - ~/dotfiles/powertoys/FancyZones/custom-layouts.json
-    - ~/dotfiles/powertoys/FancyZones/layout-hotkeys.json
-    - ~/dotfiles/powertoys/Shortcut Guide/*.json
-    - ~/dotfiles/powertoys/PowerToys Run/Settings/PowerToysRunSettings.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/settings.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/Keyboard Manager/*.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/FancyZones/settings.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/FancyZones/custom-layouts.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/FancyZones/layout-hotkeys.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/Shortcut Guide/*.json
+    - ~/MyPersonalProjects/dotfiles/powertoys/PowerToys Run/Settings/PowerToysRunSettings.json
