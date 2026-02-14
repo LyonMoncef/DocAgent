@@ -1,4 +1,6 @@
 import sys
+import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -29,6 +31,40 @@ class Style:
     HEADER = BOLD + MAGENTA
     INFO = GRAY
     ERROR = "\033[31m"
+
+
+class Spinner:
+    """Animated spinner for loading states."""
+
+    def __init__(self, message: str = "Processing"):
+        self.message = message
+        self.running = False
+        self.thread = None
+        self.frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+    def _spin(self):
+        i = 0
+        while self.running:
+            frame = self.frames[i % len(self.frames)]
+            print(f"\r{Style.INFO}{frame} {self.message}...{Style.RESET}", end="", flush=True)
+            time.sleep(0.1)
+            i += 1
+
+    def start(self, message: str = None):
+        if message:
+            self.message = message
+        self.running = True
+        self.thread = threading.Thread(target=self._spin)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+        print("\r" + " " * 50 + "\r", end="", flush=True)  # Clear line
+
+    def update(self, message: str):
+        self.message = message
 
 
 def main():
@@ -79,16 +115,34 @@ def main():
             print()
             continue
 
-        # Stream the response with visual framing
+        # Process query with visual feedback
+        spinner = Spinner("Loading configs")
+        spinner.start()
+
         print(f"{Style.USER}╭─ DocAgent ───────────────────────────────────────╮{Style.RESET}")
         try:
-            print(Style.AGENT, end="")
+            first_chunk = True
             for chunk in agent.query(user_input, stream=True):
-                print(chunk, end="", flush=True)
+                if first_chunk:
+                    spinner.stop()
+                    print(Style.AGENT, end="")
+                    first_chunk = False
+
+                # Tool execution feedback
+                if chunk.startswith("[Tool:"):
+                    print(f"{Style.GREEN}{chunk}{Style.RESET}", end="", flush=True)
+                    spinner.start("Waiting for response")
+                else:
+                    spinner.stop()
+                    print(chunk, end="", flush=True)
+
+            spinner.stop()
             print(f"{Style.RESET}")
             print(f"{Style.USER}╰───────────────────────────────────────────────────╯{Style.RESET}\n")
         except Exception as e:
-            print(f"{Style.ERROR}Error: {e}{Style.RESET}\n")
+            spinner.stop()
+            print(f"\n{Style.ERROR}Error: {e}{Style.RESET}")
+            print(f"{Style.USER}╰───────────────────────────────────────────────────╯{Style.RESET}\n")
 
 
 if __name__ == "__main__":

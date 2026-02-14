@@ -1,7 +1,8 @@
 import os
+import time
 from typing import Generator, Optional
 
-from anthropic import Anthropic
+from anthropic import Anthropic, RateLimitError
 
 from .base import BaseLLM
 
@@ -26,8 +27,9 @@ class ClaudeLLM(BaseLLM):
         messages: list[dict],
         system: Optional[str] = None,
         tools: Optional[list[dict]] = None,
+        max_retries: int = 3,
     ) -> dict:
-        """Send a chat request to Claude."""
+        """Send a chat request to Claude with retry on rate limit."""
         kwargs = {
             "model": self.model,
             "max_tokens": 4096,
@@ -39,7 +41,17 @@ class ClaudeLLM(BaseLLM):
         if tools:
             kwargs["tools"] = tools
 
-        response = self.client.messages.create(**kwargs)
+        # Retry with exponential backoff on rate limit
+        for attempt in range(max_retries):
+            try:
+                response = self.client.messages.create(**kwargs)
+                break
+            except RateLimitError as e:
+                if attempt == max_retries - 1:
+                    raise
+                wait_time = 2 ** attempt * 10  # 10s, 20s, 40s
+                print(f"\n[Rate limit hit, waiting {wait_time}s...]", flush=True)
+                time.sleep(wait_time)
 
         # Parse response into standard format
         result = {

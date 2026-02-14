@@ -38,3 +38,15 @@ Personal assistant for querying and editing dotfiles via Claude API.
 - Rate limits with large contexts (nvim has 34 lua files)
 - No confirmation prompt before edits (trusts Claude's judgment)
 - Streaming doesn't work during tool execution (shows after)
+
+---
+
+## 2026-02-14 — UX Improvements
+
+**Commit:** `4685f8a` — feat: add spinner feedback and rate limit retry
+
+- Added animated spinner during loading/waiting states
+- Tool executions now highlighted in green
+- Rate limit errors auto-retry with exponential backoff (10s, 20s, 40s)
+- Reduced zsh config to essential files only (avoid token limits)
+- System prompt updated for concise responses
