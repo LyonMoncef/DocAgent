@@ -1,3 +1,5 @@
+import argparse
+import json
 import sys
 import threading
 import time
@@ -67,7 +69,45 @@ class Spinner:
         self.message = message
 
 
+def _parse_args():
+    parser = argparse.ArgumentParser(description="DocAgent — dotfiles/config management assistant")
+    parser.add_argument("--export", metavar="TOOL", help="Export widget data for a tool (no LLM needed)")
+    parser.add_argument("--widget-type", default="shortcut_table", help="Widget type to export (default: shortcut_table)")
+    parser.add_argument("-o", "--output", metavar="FILE", help="Output file path (default: stdout)")
+    return parser.parse_args()
+
+
+def _run_export(args):
+    """Run export mode — no LLM required."""
+    config_loader = ConfigLoader()
+    # Create agent with a dummy LLM (not used in export)
+    agent = DocAgent(llm=None, config_loader=config_loader)
+    result = agent._tool_export_widget_data(args.export, args.widget_type)
+
+    # Check if the result is valid JSON (success) or an error message
+    try:
+        data = json.loads(result)
+    except json.JSONDecodeError:
+        print(f"Error: {result}", file=sys.stderr)
+        sys.exit(1)
+
+    output = json.dumps(data, indent=2)
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(output + "\n")
+        print(f"Exported to {args.output}", file=sys.stderr)
+    else:
+        print(output)
+
+
 def main():
+    args = _parse_args()
+
+    # Export mode — no LLM needed
+    if args.export:
+        _run_export(args)
+        return
+
     # Load environment variables
     load_dotenv()
 

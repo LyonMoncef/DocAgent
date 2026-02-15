@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 from .backup import BackupManager
@@ -18,6 +19,7 @@ RULES:
 - If multiple approaches exist, pick the best one. Don't list alternatives.
 - You can add/remove/list managed tools via the manage_tools tool. Use it when the user wants to track a new config or stop tracking one.
 - When the user asks to list/show shortcuts or hotkeys, use the list_shortcuts tool. It returns a pre-formatted table — output it directly without modification.
+- Use the export_widget_data tool when the user wants to export data as JSON for widget generation.
 
 Available config files: {tools}
 """
@@ -76,6 +78,25 @@ TOOLS = [
                 }
             },
             "required": []
+        }
+    },
+    {
+        "name": "export_widget_data",
+        "description": "Export tool data as JSON for widget generation. Produces structured data conforming to the agent-schemas widget_data schema.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tool_name": {
+                    "type": "string",
+                    "description": "Tool to export data for (e.g., 'powertoys')"
+                },
+                "widget_type": {
+                    "type": "string",
+                    "enum": ["shortcut_table"],
+                    "description": "Type of widget data to produce (default: 'shortcut_table')"
+                }
+            },
+            "required": ["tool_name"]
         }
     },
     {
@@ -202,6 +223,11 @@ class DocAgent:
             )
         elif name == "list_shortcuts":
             return self._tool_list_shortcuts(inputs.get("tool_name", "powertoys"))
+        elif name == "export_widget_data":
+            return self._tool_export_widget_data(
+                inputs.get("tool_name", "powertoys"),
+                inputs.get("widget_type", "shortcut_table"),
+            )
         elif name == "manage_tools":
             return self._tool_manage_tools(inputs)
         else:
@@ -263,22 +289,16 @@ class DocAgent:
         s = s.replace("_", " ").replace("-", " ").strip()
         return s.title() if s else action
 
-    def _tool_list_shortcuts(self, tool_name: str) -> str:
-        """List all hotkeys for a tool as a pre-formatted colored table."""
+    def _extract_shortcuts_data(self, tool_name: str) -> list[tuple[str, str, str, bool]]:
+        """Extract shortcut data as structured tuples.
+        Returns list of (module, action, shortcut_str, is_custom).
+        """
         if tool_name != "powertoys":
-            return f"list_shortcuts is only supported for 'powertoys' currently."
+            return []
 
         files = self.config_loader.get_tool_files("powertoys")
         if not files:
-            return "No PowerToys config files found. Run sync.sh first."
-
-        # ANSI color codes
-        YELLOW = "\033[33m"
-        GREEN = "\033[32m"
-        CYAN = "\033[36m"
-        DIM = "\033[2m"
-        BOLD = "\033[1m"
-        RESET = "\033[0m"
+            return []
 
         # Hotkey field patterns to look for
         hotkey_keys = {
@@ -295,7 +315,7 @@ class DocAgent:
             "ReconnectShortcut",
         }
 
-        rows = []  # (module, action_display, shortcut_str, is_custom)
+        rows = []
 
         for filepath, content in files.items():
             try:
@@ -305,7 +325,6 @@ class DocAgent:
 
             module = data.get("name", "")
             if not module:
-                # Derive from path: .../ModuleName/settings.json
                 parts = filepath.replace("\\", "/").split("/")
                 if len(parts) >= 2:
                     module = parts[-2]
@@ -317,7 +336,6 @@ class DocAgent:
                 if key not in props:
                     continue
                 val = props[key]
-                # Handle both {"value": {hotkey}} and {hotkey} shapes
                 if isinstance(val, dict) and "value" in val and isinstance(val["value"], dict):
                     hk = val["value"]
                 elif isinstance(val, dict) and "code" in val:
@@ -334,17 +352,29 @@ class DocAgent:
 
                 rows.append((module, self._humanize_action(key), shortcut_str, is_custom))
 
+        rows.sort(key=lambda r: (r[0].lower(), r[1].lower()))
+        return rows
+
+    def _tool_list_shortcuts(self, tool_name: str) -> str:
+        """List all hotkeys for a tool as a pre-formatted colored table."""
+        if tool_name != "powertoys":
+            return f"list_shortcuts is only supported for 'powertoys' currently."
+
+        rows = self._extract_shortcuts_data(tool_name)
         if not rows:
             return "No hotkeys found in PowerToys configs."
 
-        # Sort by module then action
-        rows.sort(key=lambda r: (r[0].lower(), r[1].lower()))
+        # ANSI color codes
+        YELLOW = "\033[33m"
+        GREEN = "\033[32m"
+        CYAN = "\033[36m"
+        DIM = "\033[2m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
 
-        # Calculate column widths
         mod_w = max(len(r[0]) for r in rows)
         act_w = max(len(r[1]) for r in rows)
 
-        # Build table
         header = f"{'Module':<{mod_w}}  {'Action':<{act_w}}  Shortcut"
         sep = "─" * (mod_w + act_w + 20)
         lines = [
@@ -367,6 +397,36 @@ class DocAgent:
         lines.append(f"{DIM}★ = user-customized (differs from default){RESET}\n")
 
         return "\n".join(lines)
+
+    def _tool_export_widget_data(self, tool_name: str, widget_type: str = "shortcut_table") -> str:
+        """Export tool data as JSON conforming to the agent-schemas widget_data schema."""
+        if widget_type != "shortcut_table":
+            return f"Unsupported widget_type: {widget_type}"
+
+        rows = self._extract_shortcuts_data(tool_name)
+        if not rows:
+            return f"No data found for tool '{tool_name}'."
+
+        widget_data = {
+            "schema_version": "1.0",
+            "widget_type": "shortcut_table",
+            "title": f"{tool_name.replace('_', ' ').title()} Shortcuts",
+            "metadata": {
+                "source_agent": "DocAgent",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "tool_name": tool_name,
+            },
+            "data": {
+                "columns": ["Module", "Action", "Shortcut"],
+                "rows": [
+                    {"values": [module, action, shortcut], "highlight": is_custom}
+                    for module, action, shortcut, is_custom in rows
+                ],
+                "group_by": "Module",
+            },
+        }
+
+        return json.dumps(widget_data, indent=2)
 
     def _tool_manage_tools(self, inputs: dict) -> str:
         """Add, remove, or list managed tools."""
