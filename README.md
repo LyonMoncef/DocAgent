@@ -13,14 +13,19 @@ Personal assistant for querying and editing your dotfiles/config files using Cla
 - Chat interface that knows your configs
 - Ask questions in natural language → get answers from your actual setup
 - Edit configs through conversation → automatic backup
+- Export structured data for widget generation (no LLM needed)
 
-## Scope
+## Features
 
 | Feature | Status |
 |---------|--------|
-| Query configs (nvim, tmux, zsh...) | Phase 2 |
-| Edit configs with backup | Phase 3 |
-| CLI REPL | Phase 4 |
+| Query configs (nvim, tmux, zsh, bash, powertoys) | Done |
+| Edit configs with backup | Done |
+| CLI REPL with spinner feedback | Done |
+| Global `docagent` shell command | Done |
+| Manage tracked tools (add/remove/list) | Done |
+| List shortcuts (PowerToys) | Done |
+| Export widget data (`--export` CLI) | Done |
 | Web API / Frontend | Backlog |
 | OpenAI support | Backlog |
 
@@ -47,5 +52,17 @@ cp .env.example .env
 ## Usage
 
 ```bash
+# Interactive REPL (requires API key)
 python -m src.main
+
+# Or via global command
+docagent
+
+# Export widget data (no API key needed)
+python -m src.main --export powertoys -o /tmp/shortcuts.json
 ```
+
+## Related projects
+
+- [agent-schemas](https://github.com/LyonMoncef/agent-schemas) — JSON Schema contract for inter-agent data exchange
+- [WidgetGenerator](https://github.com/LyonMoncef/WidgetGenerator) — Generates Rainmeter skins from exported data
